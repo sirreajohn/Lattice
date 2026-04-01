@@ -4,6 +4,7 @@
 	import NoteNode from './NoteNode.svelte';
 	import BoardNode from './BoardNode.svelte';
 	import ColumnNode from './ColumnNode.svelte';
+	import VideoNode from './VideoNode.svelte';
 
 	let { node } = $props();
 
@@ -150,6 +151,7 @@
 		note: NoteNode,
 		board: BoardNode,
 		column: ColumnNode,
+		video: VideoNode,
 	};
 
 	let NodeComponent = $derived(typeConfig[node.type]);
