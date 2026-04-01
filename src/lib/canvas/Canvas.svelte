@@ -1,9 +1,10 @@
-<script>
-	import { canvasState } from '$lib/state/canvas.svelte.js';
-	import { nodesState } from '$lib/state/nodes.svelte.js';
-	import BaseNode from '$lib/nodes/BaseNode.svelte';
-	import ConnectionLines from './ConnectionLines.svelte';
+<script lang="js">
+	import { canvasState } from "$lib/state/canvas.svelte.js";
+	import { nodesState } from "$lib/state/nodes.svelte.js";
+	import BaseNode from "$lib/nodes/BaseNode.svelte";
+	import ConnectionLines from "./ConnectionLines.svelte";
 
+	let { children } = $props();
 	let canvasElement;
 
 	function handlePointerDown(e) {
@@ -20,12 +21,12 @@
 			}
 
 			function handlePointerUp() {
-				window.removeEventListener('pointermove', handlePointerMove);
-				window.removeEventListener('pointerup', handlePointerUp);
+				window.removeEventListener("pointermove", handlePointerMove);
+				window.removeEventListener("pointerup", handlePointerUp);
 			}
 
-			window.addEventListener('pointermove', handlePointerMove);
-			window.addEventListener('pointerup', handlePointerUp);
+			window.addEventListener("pointermove", handlePointerMove);
+			window.addEventListener("pointerup", handlePointerUp);
 		} else {
 			nodesState.selectedNodeId = null;
 		}
@@ -37,17 +38,20 @@
 			canvasState.y -= e.deltaY;
 			return;
 		}
-		
+
 		e.preventDefault();
 		const zoomFactor = 1.05;
 		const direction = e.deltaY > 0 ? -1 : 1;
 		const scaleChange = direction > 0 ? zoomFactor : 1 / zoomFactor;
-		
+
 		const rect = canvasElement.getBoundingClientRect();
 		const mouseX = e.clientX - rect.left;
 		const mouseY = e.clientY - rect.top;
 
-		const newScale = Math.min(Math.max(canvasState.scale * scaleChange, 0.1), 5);
+		const newScale = Math.min(
+			Math.max(canvasState.scale * scaleChange, 0.1),
+			5,
+		);
 		const actualScaleChange = newScale / canvasState.scale;
 
 		canvasState.x = mouseX - (mouseX - canvasState.x) * actualScaleChange;
@@ -56,7 +60,7 @@
 	}
 </script>
 
-<div 
+<div
 	bind:this={canvasElement}
 	onpointerdown={handlePointerDown}
 	onwheel={handleWheel}
@@ -67,13 +71,17 @@
 		background-size: {30 * canvasState.scale}px {30 * canvasState.scale}px;
 	"
 >
-	<div 
+	<div
 		class="absolute top-0 left-0 w-0 h-0 overflow-visible origin-top-left"
 		style="transform: translate({canvasState.x}px, {canvasState.y}px) scale({canvasState.scale})"
 	>
 		<ConnectionLines />
-		{#each nodesState.nodes.filter(n => !n.parentId) as node (node.id)}
+		{#each nodesState.nodes.filter((n) => !n.parentId) as node (node.id)}
 			<BaseNode {node} />
 		{/each}
 	</div>
+
+	{#if children}
+		{@render children()}
+	{/if}
 </div>

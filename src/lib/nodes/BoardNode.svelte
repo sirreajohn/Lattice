@@ -1,42 +1,97 @@
 <script>
 	import { nodesState } from '$lib/state/nodes.svelte.js';
-	
+	import { marked } from 'marked';
+	import DOMPurify from 'isomorphic-dompurify';
+
 	let { node } = $props();
+	let isEditing = $state(false);
+	let isEditingIcon = $state(false);
+	let element = $state();
+	let iconElement = $state();
 
 	function handleInput(e) {
 		nodesState.updateNodeData(node.id, { title: e.target.value });
 	}
 
-	function navigateToBoard(e) {
+	function handleDblClick(e) {
+		if (isEditing || isEditingIcon) return;
 		e.stopPropagation();
 		window.location.href = `/b/${node.id}`;
 	}
+
+	function startEditing(e) {
+		e.stopPropagation(); 
+		isEditing = true;
+		setTimeout(() => { if (element) element.focus(); }, 0);
+	}
+
+	function startEditingIcon(e) {
+		e.stopPropagation();
+		isEditingIcon = true;
+		setTimeout(() => { if (iconElement) iconElement.focus(); }, 0);
+	}
+
+	let renderedTitle = $derived(
+		node.data.title 
+			? DOMPurify.sanitize(marked.parseInline(node.data.title)) 
+			: '<span class="opacity-50 font-mono text-xs">Untitled Board</span>'
+	);
 </script>
 
-<div class="flex flex-col h-full w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md overflow-hidden hover:border-[var(--color-accent)] transition-colors" ondblclick={navigateToBoard}>
-	<!-- Drag handle / Header -->
-	<div class="h-8 w-full cursor-grab active:cursor-grabbing border-b border-[var(--color-border)] opacity-60 hover:opacity-100 flex items-center justify-between px-3 bg-[#111]">
-		<div class="flex space-x-1.5 items-center">
-			<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-[var(--color-text-secondary)]"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
-			<span class="text-xs uppercase tracking-wider font-mono text-[var(--color-text-secondary)] font-semibold">Board</span>
-		</div>
-	</div>
-	
-	<div class="p-4 flex-1 flex flex-col justify-between group">
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div 
+	class="w-full h-full flex flex-col items-center justify-center p-6 transition-colors cursor-pointer group"
+	ondblclick={handleDblClick}
+>
+	{#if isEditingIcon}
+		<!-- stopPropagation on keydown/pointerdown prevents drag -->
 		<input 
-			class="w-full bg-transparent text-lg font-mono font-bold text-[var(--color-text-primary)] focus:outline-none focus:ring-0 truncate"
-			value={node.data.title || 'Untitled Board'}
-			oninput={handleInput}
-			placeholder="Board Title"
+			bind:this={iconElement}
+			class="w-12 bg-transparent text-center text-[38px] focus:outline-none mb-2 pointer-events-auto"
+			style="filter: grayscale(1) contrast(1.2)"
+			value={node.data.icon || ''}
+			oninput={(e) => nodesState.updateNodeData(node.id, { icon: e.target.value })}
+			onblur={() => (isEditingIcon = false)}
+			onkeydown={(e) => { if (e.key === 'Enter') isEditingIcon = false; }}
+			maxlength="2"
+            placeholder="🌍"
 		/>
-		<p class="text-[10px] text-[var(--color-text-secondary)] mt-2 font-mono opacity-50">Double click to enter</p>
-		
-		<button 
-			onclick={navigateToBoard}
-			onpointerdown={(e) => e.stopPropagation()}
-			class="mt-4 self-end bg-[var(--color-border)] hover:bg-[var(--color-accent)] text-white text-xs px-3 py-1.5 rounded transition-colors opacity-0 group-hover:opacity-100 font-mono"
+	{:else}
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<div 
+			class="mb-3 text-[var(--color-text-secondary)] group-hover:text-[var(--color-accent)] transition-colors cursor-pointer pointer-events-auto flex items-center justify-center"
+			onclick={startEditingIcon}
+			style={node.data.icon ? "filter: grayscale(1) contrast(1.2); font-size: 38px; line-height: 1;" : ""}
 		>
-			Enter &rarr;
-		</button>
+			{#if node.data.icon}
+				{node.data.icon}
+			{:else}
+				<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="7.5 4.21 12 6.81 16.5 4.21"/><polyline points="7.5 19.79 7.5 14.6 3 12"/><polyline points="21 12 16.5 14.6 16.5 19.79"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+			{/if}
+		</div>
+	{/if}
+
+	{#if isEditing}
+		<input 
+			bind:this={element}
+			class="w-full bg-transparent text-center font-mono font-bold text-sm text-[var(--color-text-primary)] focus:outline-none placeholder-opacity-50"
+			value={node.data.title || ''}
+			oninput={handleInput}
+			onblur={() => (isEditing = false)}
+			onkeydown={(e) => { if (e.key === 'Enter') isEditing = false; }}
+			placeholder="Board string"
+		/>
+	{:else}
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<div 
+			class="w-full text-center font-mono font-bold text-sm text-[var(--color-text-primary)] cursor-text markdown-inline"
+			onclick={startEditing}
+		>
+			{@html renderedTitle}
+		</div>
+	{/if}
+
+	<div class="mt-2 text-[10px] font-mono text-[var(--color-text-secondary)] opacity-0 group-hover:opacity-50 uppercase tracking-widest pointer-events-none transition-opacity">
+		Double Click to Enter
 	</div>
 </div>

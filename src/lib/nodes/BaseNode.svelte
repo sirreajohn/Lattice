@@ -9,48 +9,79 @@
 
 	let baseElement;
 	let isNested = $derived(!!node.parentId);
+	
+	// Thresholding flag to prevent Svelte from opening "Edit" inputs natively after releasing the drag
+	let dragJustFinished = false;
 
 	function handlePointerDown(e) {
 		if (e.button !== 0) return;
 		if (['INPUT', 'TEXTAREA', 'BUTTON', 'A'].includes(e.target.tagName)) return;
 		
-		e.stopPropagation();
-		nodesState.selectedNodeId = node.id;
-
-		// Pop Logic - instantly break out of deck to follow pointer
-		if (node.parentId) {
-			if (baseElement) {
-				const rect = baseElement.getBoundingClientRect();
-				const canvasPos = canvasState.screenToCanvas(rect.left, rect.top);
-				nodesState.updateNodePosition(node.id, canvasPos.x, canvasPos.y);
-			}
-			nodesState.updateNodeParent(node.id, null);
+		// Always use the OS header as a structural anchor.
+		// If a Deck is filled, restrict dragging strictly to the OS header.
+		if (node.type === 'column') {
+			const hasChildren = nodesState.nodes.some(n => n.parentId === node.id);
+			if (hasChildren && !e.target.closest('.os-header')) return;
 		}
 
-		const startX = e.clientX;
-		const startY = e.clientY;
-		const initialNodeX = node.x;
-		const initialNodeY = node.y;
+		// Prevent bubbled drag events so nested nodes don't drag the parent Deck
+		e.stopPropagation();
+		
+		nodesState.selectedNodeId = node.id;
+
+		let isDragging = false;
+		let startX = e.clientX;
+		let startY = e.clientY;
+		let activeInitialX = node.x;
+		let activeInitialY = node.y;
 
 		function handlePointerMove(ev) {
-			const dx = (ev.clientX - startX) / canvasState.scale;
-			const dy = (ev.clientY - startY) / canvasState.scale;
-			nodesState.updateNodePosition(node.id, initialNodeX + dx, initialNodeY + dy);
+			if (!isDragging) {
+				if (Math.abs(ev.clientX - startX) > 3 || Math.abs(ev.clientY - startY) > 3) {
+					isDragging = true;
+					
+					// Pop Logic fires exactly when drag officially breaks the 3px threshold
+					if (node.parentId) {
+						if (baseElement) {
+							const rect = baseElement.getBoundingClientRect();
+							const canvasPos = canvasState.screenToCanvas(rect.left, rect.top);
+							nodesState.updateNodePosition(node.id, canvasPos.x, canvasPos.y);
+						}
+						nodesState.updateNodeParent(node.id, null);
+					}
+					
+					activeInitialX = node.x;
+					activeInitialY = node.y;
+					startX = ev.clientX;
+					startY = ev.clientY;
+				}
+			}
+
+			if (isDragging) {
+				const dx = (ev.clientX - startX) / canvasState.scale;
+				const dy = (ev.clientY - startY) / canvasState.scale;
+				nodesState.updateNodePosition(node.id, activeInitialX + dx, activeInitialY + dy);
+			}
 		}
 
 		function handlePointerUp(ev) {
 			window.removeEventListener('pointermove', handlePointerMove);
 			window.removeEventListener('pointerup', handlePointerUp);
 
-			// Snapping into a Deck
-			if (node.type !== 'column') {
-				const elements = document.elementsFromPoint(ev.clientX, ev.clientY);
-				const deckElement = elements.find(el => el.classList.contains('lattice-deck'));
-				
-				if (deckElement) {
-					const deckId = deckElement.getAttribute('data-column-id');
-					if (deckId !== node.id) {
-						nodesState.updateNodeParent(node.id, deckId);
+			if (isDragging) {
+				dragJustFinished = true;
+				setTimeout(() => dragJustFinished = false, 50);
+
+				// Snapping into a Deck
+				if (node.type !== 'column') {
+					const elements = document.elementsFromPoint(ev.clientX, ev.clientY);
+					const deckElement = elements.find(el => el.classList.contains('lattice-deck'));
+					
+					if (deckElement) {
+						const deckId = deckElement.getAttribute('data-column-id');
+						if (deckId !== node.id) {
+							nodesState.updateNodeParent(node.id, deckId);
+						}
 					}
 				}
 			}
@@ -58,6 +89,31 @@
 
 		window.addEventListener('pointermove', handlePointerMove);
 		window.addEventListener('pointerup', handlePointerUp);
+	}
+
+	function handleResizeDown(e) {
+		e.stopPropagation();
+		let startX = e.clientX;
+		let startY = e.clientY;
+		let startW = node.width === 'auto' ? baseElement.offsetWidth : node.width;
+		let startH = node.height === 'auto' ? baseElement.offsetHeight : node.height;
+
+		function move(ev) {
+			const dx = (ev.clientX - startX) / canvasState.scale;
+			const dy = (ev.clientY - startY) / canvasState.scale;
+			
+			node.width = Math.max(startW + dx, 150);
+			node.height = Math.max(startH + dy, 50);
+			nodesState.saveToStorage();
+		}
+
+		function up() {
+			window.removeEventListener('pointermove', move);
+			window.removeEventListener('pointerup', up);
+		}
+
+		window.addEventListener('pointermove', move);
+		window.addEventListener('pointerup', up);
 	}
 
 	function handleAnchorPointerDown(e) {
@@ -74,7 +130,6 @@
 			window.removeEventListener('pointermove', move);
 			window.removeEventListener('pointerup', up);
 			
-			// Detect drop onto another base node container
 			const elements = document.elementsFromPoint(ev.clientX, ev.clientY);
 			const targetNodeEl = elements.find(el => el.hasAttribute('data-node-id'));
 			
@@ -104,20 +159,40 @@
 <div
 	bind:this={baseElement}
 	data-node-id={node.id}
-	class="group bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md shadow-lg shadow-black/50 transition-shadow outline-none {nodesState.selectedNodeId === node.id ? 'ring-1 ring-[var(--color-accent)] z-20' : 'z-10'} {isNested ? 'relative' : 'absolute'}"
+	class="group bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md shadow-lg shadow-black/50 transition-shadow outline-none flex flex-col overflow-hidden {nodesState.selectedNodeId === node.id ? 'ring-1 ring-[var(--color-accent)] z-20' : 'z-10'} {isNested ? 'relative' : 'absolute'}"
 	style="
 		{isNested ? '' : `transform: translate(${node.x}px, ${node.y}px);`} 
 		width: {isNested ? '100%' : node.width + 'px'}; 
 		height: {node.height === 'auto' ? 'auto' : node.height + 'px'};
 	"
 	onpointerdown={handlePointerDown}
+	onclickcapture={(e) => { if (dragJustFinished) { e.stopPropagation(); } }}
 	role="button"
 >
-	{#if NodeComponent}
-		<NodeComponent {node} />
-	{:else}
-		<div class="p-4 text-red-500">Unknown node type: {node.type}</div>
-	{/if}
+	<!-- OS UI Top Bar -->
+	<div class="os-header h-[14px] w-full bg-[#111] border-b border-[var(--color-border)] flex items-center justify-between px-2 cursor-grab active:cursor-grabbing shrink-0 z-20">
+		<div class="flex gap-1 opacity-30 group-hover:opacity-100 transition-opacity pointer-events-none">
+			<div class="w-1.5 h-1.5 rounded-full bg-[#ff5f56]"></div>
+			<div class="w-1.5 h-1.5 rounded-full bg-[#ffbd2e]"></div>
+			<div class="w-1.5 h-1.5 rounded-full bg-[#27c93f]"></div>
+		</div>
+		<button 
+			class="w-3 h-3 text-[var(--color-text-secondary)] hover:text-red-400 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer pointer-events-auto"
+			onclick={(e) => { e.stopPropagation(); nodesState.removeNode(node.id); }}
+			title="Delete node"
+		>
+			<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+		</button>
+	</div>
+
+	<!-- Node Specific Content -->
+	<div class="flex-1 w-full h-[calc(100%-14px)] relative {node.type === 'column' ? 'flex flex-col' : ''}">
+		{#if NodeComponent}
+			<NodeComponent {node} />
+		{:else}
+			<div class="p-4 text-red-500">Unknown node type: {node.type}</div>
+		{/if}
+	</div>
 
 	<!-- Connection Anchor UI -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -126,12 +201,14 @@
 		onpointerdown={handleAnchorPointerDown}
 	></div>
 
-	<!-- Delete Button (Visible on Hover) -->
-	<button 
-		class="absolute -top-2 -right-2 w-5 h-5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-full text-[var(--color-text-secondary)] hover:text-red-400 hover:border-red-400 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 z-30 shadow"
-		onclick={(e) => { e.stopPropagation(); nodesState.removeNode(node.id); }}
-		title="Delete node"
+	<!-- Resize UI Handle -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div 
+		class="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize opacity-0 group-hover:opacity-100 transition-opacity z-20"
+		onpointerdown={handleResizeDown}
 	>
-		<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-	</button>
+		<div class="absolute bottom-1 right-1 w-2 h-2 opacity-30 text-[var(--color-text-secondary)]">
+			<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v6h-6"/><path d="M21 21l-7-7"/><path d="M15 3h6v6"/><path d="M21 3l-7 7"/><path d="M9 21H3v-6"/><path d="M3 21l7-7"/><path d="M3 9V3h6"/><path d="M3 3l7 7"/></svg>
+		</div>
+	</div>
 </div>
