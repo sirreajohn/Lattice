@@ -4,6 +4,9 @@ export class NodesState {
 	// Array of connections: { id, from: nodeId, to: nodeId }
 	connections = $state([]);
 
+	// Draft connection for drawing lines
+	draftConnection = $state(null);
+
 	// Selected node id
 	selectedNodeId = $state(null);
 	boardId = '';
@@ -15,7 +18,7 @@ export class NodesState {
 
 	addNode(type, x, y, data = {}) {
 		const id = crypto.randomUUID();
-		this.nodes.push({ id, type, x, y, width: 250, height: "auto", data });
+		this.nodes.push({ id, type, x, y, parentId: null, width: 250, height: "auto", data });
 		this.saveToStorage();
 		return id;
 	}
@@ -33,6 +36,14 @@ export class NodesState {
 		const node = this.nodes.find(n => n.id === id);
 		if (node) {
 			node.data = { ...node.data, ...data };
+			this.saveToStorage();
+		}
+	}
+
+	updateNodeParent(id, parentId) {
+		const node = this.nodes.find(n => n.id === id);
+		if (node) {
+			node.parentId = parentId;
 			this.saveToStorage();
 		}
 	}
