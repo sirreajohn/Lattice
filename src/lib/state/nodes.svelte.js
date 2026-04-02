@@ -1,8 +1,27 @@
+import { supabase } from '$lib/supabase.js';
+import { authState } from '$lib/state/auth.svelte.js';
+import { env } from '$env/dynamic/public';
+
+const DEBOUNCE_MS = parseInt(env.PUBLIC_DEBOUNCE_TIMEOUT_MS || '5000', 10);
+const MAX_CARDS = parseInt(env.PUBLIC_MAX_CARDS_PER_BOARD || '500', 10);
+const STORAGE_MODE = env.PUBLIC_STORAGE_MODE || 'local';
+
+function debounce(func, wait) {
+	let timeout;
+	return function (...args) {
+		clearTimeout(timeout);
+		timeout = setTimeout(() => func(...args), wait);
+	};
+}
+
 export class NodesState {
 	// Array of nodes: { id, type, x, y, width, height, data }
 	nodes = $state([]);
 	// Array of connections: { id, from: nodeId, to: nodeId }
 	connections = $state([]);
+	
+	// Networking state
+	syncStatus = $state('synced'); // 'synced', 'saving', 'error'
 
 	// Draft connection for drawing lines
 	draftConnection = $state(null);
@@ -17,6 +36,10 @@ export class NodesState {
 	}
 
 	addNode(type, x, y, data = {}) {
+		if (this.nodes.length >= MAX_CARDS) {
+			alert(`Board limit reached: maximum of ${MAX_CARDS} cards allowed.`);
+			return null;
+		}
 		const id = crypto.randomUUID();
 		this.nodes.push({ id, type, x, y, parentId: null, width: 250, height: "auto", data });
 		this.saveToStorage();
@@ -96,29 +119,78 @@ export class NodesState {
 		}
 	}
 
-	loadFromStorage() {
+	async loadFromStorage() {
 		try {
 			if (typeof window !== 'undefined') {
-				const savedNodes = localStorage.getItem(`lattice-${this.boardId}-nodes`);
-				const savedConnections = localStorage.getItem(`lattice-${this.boardId}-connections`);
-				if (savedNodes) Object.assign(this.nodes, JSON.parse(savedNodes));
-				if (savedConnections) Object.assign(this.connections, JSON.parse(savedConnections));
+				if (STORAGE_MODE === 'local') {
+					const savedNodes = localStorage.getItem(`lattice-${this.boardId}-nodes`);
+					const savedConnections = localStorage.getItem(`lattice-${this.boardId}-connections`);
+					if (savedNodes) this.nodes = JSON.parse(savedNodes);
+					if (savedConnections) this.connections = JSON.parse(savedConnections);
+					return;
+				}
+
+				// Cloud mode load
+				const { data, error } = await supabase
+					.from('boards')
+					.select('*')
+					.eq('id', this.boardId)
+					.single();
+
+				if (data) {
+					// Use JSON parse trick to avoid SvelteKit reactive proxy bleed
+					if (data.nodes) this.nodes = JSON.parse(JSON.stringify(data.nodes));
+					if (data.connections) this.connections = JSON.parse(JSON.stringify(data.connections));
+					
+					// Tell global metadata about the loaded name
+					globalMetadata.setName(this.boardId, data.name || `board_${this.boardId.slice(0,6)}`);
+				} else if (error && error.code === 'PGRST116') {
+					// 0 rows found: Create it
+					// Bundle owner_id if signed in so RLS accepts it
+					const newBoard = { 
+						id: this.boardId, 
+						name: `board_${this.boardId.slice(0,6)}`, 
+						nodes: this.nodes, 
+						connections: this.connections 
+					};
+					if (authState.currentUser) {
+						newBoard.owner_id = authState.currentUser.id;
+					}
+					await supabase.from('boards').insert(newBoard);
+				}
 			}
 		} catch (e) {
 			console.error("Failed to load lattice state:", e);
 		}
 	}
 
-	saveToStorage() {
+	saveToStorage = debounce(async () => {
 		try {
 			if (typeof window !== 'undefined') {
-				localStorage.setItem(`lattice-${this.boardId}-nodes`, JSON.stringify(this.nodes));
-				localStorage.setItem(`lattice-${this.boardId}-connections`, JSON.stringify(this.connections));
+				if (STORAGE_MODE === 'local') {
+					localStorage.setItem(`lattice-${this.boardId}-nodes`, JSON.stringify(this.nodes));
+					localStorage.setItem(`lattice-${this.boardId}-connections`, JSON.stringify(this.connections));
+					return;
+				}
+
+				// Cloud mode save
+				this.syncStatus = 'saving';
+				const rawNodes = JSON.parse(JSON.stringify(this.nodes));
+				const rawConnections = JSON.parse(JSON.stringify(this.connections));
+
+				let { error } = await supabase
+					.from('boards')
+					.update({ nodes: rawNodes, connections: rawConnections, updated_at: new Date().toISOString() })
+					.eq('id', this.boardId);
+					
+				if (error) throw error;
+				this.syncStatus = 'synced';
 			}
 		} catch (e) {
 			console.error("Failed to save lattice state:", e);
+			this.syncStatus = 'error';
 		}
-	}
+	}, DEBOUNCE_MS);
 }
 
 export const nodesState = new NodesState();
@@ -136,6 +208,10 @@ export class GlobalMetadata {
 		this.boardNames[id] = name;
 		if (typeof window !== 'undefined') {
 			localStorage.setItem('lattice-board-names', JSON.stringify(this.boardNames));
+			// Sync backward to supabase if it's the current board and we are in cloud mode
+			if (STORAGE_MODE === 'cloud' && nodesState.boardId === id) {
+				supabase.from('boards').update({ name, updated_at: new Date().toISOString() }).eq('id', id).then();
+			}
 		}
 	}
 
