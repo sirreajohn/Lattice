@@ -17,6 +17,12 @@ It is engineered from the ground up to be blazingly fast using Svelte 5, fully r
   - **Cloud Mode:** Supabase integration for cross-device syncing, debounced Postgres saving, and real-time state tracking.
 - **Production-Ready Security**: Out-of-the-box Markdown sanitation (via `DOMPurify`) to prevent XSS, and strictly typed authentication flows.
 - **DevOps Perfected**: Pre-configured robust multi-stage Dockerfile utilizing SvelteKit's standalone Node adapter, optimizing it perfectly for self-hosting behind Cloudflare or NGINX.
+(marketing fluff honestly)
+
+## Screenshots
+
+![alt text](./assets/doc_images/LATTICE%20Cloud.png)
+![alt text](./assets/doc_images/LATTICE%20OFF.png)
 
 ## 🚀 Quick Start (Local Development)
 
