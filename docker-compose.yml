@@ -1,0 +1,11 @@
+services:
+  lattice:
+    build: .
+    container_name: lattice-app
+    ports:
+      - "5173:5173"
+    env_file:
+      - .env
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
