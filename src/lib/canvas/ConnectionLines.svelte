@@ -80,7 +80,7 @@
 </script>
 
 <svg
-	class="absolute top-0 left-0 w-0 h-0 overflow-visible pointer-events-none z-0"
+	class="absolute top-0 left-0 w-1 h-1 overflow-visible pointer-events-none z-0"
 >
 	<defs>
 		<marker

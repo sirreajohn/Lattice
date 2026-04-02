@@ -27,6 +27,10 @@
 
 		// Prevent bubbled drag events so nested nodes don't drag the parent Deck
 		e.stopPropagation();
+		e.preventDefault();
+		if (e.target && e.pointerId !== undefined) {
+			e.target.setPointerCapture(e.pointerId);
+		}
 		
 		nodesState.selectedNodeId = node.id;
 
@@ -94,6 +98,10 @@
 
 	function handleResizeDown(e) {
 		e.stopPropagation();
+		e.preventDefault();
+		if (e.target && e.pointerId !== undefined) {
+			e.target.setPointerCapture(e.pointerId);
+		}
 		let startX = e.clientX;
 		let startY = e.clientY;
 		let startW = node.width === 'auto' ? baseElement.offsetWidth : node.width;
@@ -119,6 +127,10 @@
 
 	function handleAnchorPointerDown(ev, port) {
 		ev.stopPropagation();
+		ev.preventDefault();
+		if (ev.target && ev.pointerId !== undefined) {
+			ev.target.setPointerCapture(ev.pointerId);
+		}
 		const startCanvasPos = canvasState.screenToCanvas(ev.clientX, ev.clientY);
 		nodesState.draftConnection = { fromId: node.id, fromPort: port, endX: startCanvasPos.x, endY: startCanvasPos.y, targetNodeId: null, targetPort: null };
 
