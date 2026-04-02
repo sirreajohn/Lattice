@@ -76,6 +76,9 @@
 				<!-- Hide sync status in local mode -->
 				<div class="w-1.5 h-1.5 rounded-full bg-slate-500 shadow-[0_0_4px_rgba(100,116,139,0.8)]"></div>
 				<span class="text-slate-500">Local Only</span>
+			{:else if !authState.currentUser && authState.initialized}
+				<div class="w-1.5 h-1.5 rounded-full bg-orange-500 shadow-[0_0_4px_rgba(249,115,22,0.8)] animate-pulse"></div>
+				<span class="text-orange-500 transition-colors">Temp Session (Data Not Saved)</span>
 			{:else}
 				{#if nodesState.syncStatus === 'saving'}
 					<div class="w-1.5 h-1.5 rounded-full bg-yellow-500 shadow-[0_0_4px_rgba(234,179,8,0.8)] animate-pulse"></div>

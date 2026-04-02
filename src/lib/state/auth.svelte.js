@@ -15,6 +15,9 @@ class AuthState {
 			// Listen for auth events seamlessly
 			supabase.auth.onAuthStateChange((_event, session) => {
 				this.currentUser = session?.user || null;
+				if (_event === 'SIGNED_OUT') {
+					window.location.href = '/';
+				}
 			});
 		}
 	}
