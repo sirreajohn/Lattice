@@ -2,6 +2,7 @@
 	import { page } from "$app/stores";
 	import { globalMetadata, nodesState } from "$lib/state/nodes.svelte.js";
 	import { env } from "$env/dynamic/public";
+	import { goto } from "$app/navigation";
 
 	const DB_MODE = env.PUBLIC_DB_MODE || "local";
 
@@ -14,6 +15,7 @@
 
 	function handleNameInput(e) {
 		globalMetadata.setName(boardId, e.target.value);
+		nodesState.saveToStorage(); // Schedule save immediately on rename
 	}
 
 	function startEditingName() {
@@ -21,6 +23,12 @@
 		setTimeout(() => {
 			if (nameInputElement) nameInputElement.focus();
 		}, 0);
+	}
+
+	async function navigate(e, path) {
+		if (e) e.preventDefault();
+		nodesState.forceSave();
+		await goto(path);
 	}
 </script>
 
@@ -31,6 +39,7 @@
 		<!-- Logo -->
 		<a
 			href="/"
+			onclick={(e) => navigate(e, "/")}
 			class="flex items-center gap-2 hover:opacity-80 transition-opacity"
 		>
 			<div
@@ -49,6 +58,7 @@
 
 		<!-- Path / Breadcrumbs -->
 		{#if isNestedBoard}
+			{@const backPath = nodesState.parentId && nodesState.parentId !== 'default' ? '/b/' + nodesState.parentId : '/'}
 			<div
 				class="flex items-center gap-2 text-[var(--color-text-secondary)] font-mono text-xs overflow-x-auto no-scrollbar max-w-[50vw]"
 			>
@@ -57,6 +67,7 @@
 				{#each nodesState.lineage as ancestor (ancestor.id)}
 					<a
 						href="/b/{ancestor.id}"
+						onclick={(e) => navigate(e, `/b/${ancestor.id}`)}
 						class="truncate max-w-[150px] hover:text-[var(--color-text-primary)] hover:underline transition-colors"
 					>
 						{globalMetadata.getName(ancestor.id)}
@@ -94,7 +105,8 @@
 
 				<!-- Back to workspace button -->
 				<a
-					href={nodesState.parentId && nodesState.parentId !== 'default' ? '/b/' + nodesState.parentId : '/'}
+					href={backPath}
+					onclick={(e) => navigate(e, backPath)}
 					class="ml-2 hover:text-[var(--color-text-primary)] flex items-center gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] px-2 py-0.5 rounded transition-colors text-[10px]"
 				>
 					&larr; Back

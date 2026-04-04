@@ -166,8 +166,17 @@ export class NodesState {
 					this.lineage.forEach(ancestor => {
 						globalMetadata.setName(ancestor.id, ancestor.name);
 					});
+
+					// Seed names for child boards found on the canvas
+					if (localData.childMetadata) {
+						Object.entries(localData.childMetadata).forEach(([id, name]) => {
+							globalMetadata.setName(id, name);
+						});
+					}
 					
-					globalMetadata.setName(this.boardId, localData.name || `board_${this.boardId.slice(0, 6)}`);
+					if (localData.name) {
+						globalMetadata.setName(this.boardId, localData.name);
+					}
 					
 					if (seedParentId && !localData.parent_id) this.saveToStorage();
 				}

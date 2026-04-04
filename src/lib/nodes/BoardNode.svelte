@@ -26,6 +26,7 @@
 			return;
 		}
 
+		nodesState.forceSave();
 		goto(`/b/${node.id}?parent=${nodesState.boardId}&depth=${nodesState.depth + 1}`);
 	}
 

@@ -37,10 +37,19 @@ export async function initDb() {
 		`);
 
 		// Automatically patch old tables seamlessly without data purging!
-		await db.query(`
-			ALTER TABLE boards ADD COLUMN IF NOT EXISTS parent_id TEXT;
-			ALTER TABLE boards ADD COLUMN IF NOT EXISTS depth INTEGER DEFAULT 0;
-		`);
+		// NOTE: PGlite's WASM engine crashes fatally with "Aborted()" if MULTIPLE ALTERs are bundled 
+		// into a single db.exec() or db.query() block. They *must* be called independently via db.query().
+		try {
+			await db.query(`ALTER TABLE boards ADD COLUMN IF NOT EXISTS parent_id TEXT;`);
+		} catch (e) {
+			if (!e.message.includes('already exists')) throw e;
+		}
+		
+		try {
+			await db.query(`ALTER TABLE boards ADD COLUMN IF NOT EXISTS depth INTEGER DEFAULT 0;`);
+		} catch (e) {
+			if (!e.message.includes('already exists')) throw e;
+		}
 
 		isDbInitialized = true;
 	} catch (error) {

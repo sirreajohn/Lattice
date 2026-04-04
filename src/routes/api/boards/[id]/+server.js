@@ -24,16 +24,32 @@ export async function GET({ params, url }) {
 				FROM boards b
 				JOIN lineage l ON b.id = l.parent_id
 			)
-			SELECT id, name FROM lineage WHERE id != $2 ORDER BY level DESC
+			SELECT id, name FROM lineage WHERE id != $2 AND id != 'default' ORDER BY level DESC
 		`, [lineageId, lineageFilter]);
 
 		if (res.rows.length > 0) {
 			const board = res.rows[0];
 			board.lineage = lineageRes.rows;
+
+			// Fetch names for all child boards shown on this canvas to ensure titles are synced
+			const childBoardIds = (board.nodes || [])
+				.filter(node => node.type === 'board')
+				.map(node => node.id);
+
+			if (childBoardIds.length > 0) {
+				const childRes = await db.query('SELECT id, name FROM boards WHERE id = ANY($1)', [childBoardIds]);
+				board.childMetadata = childRes.rows.reduce((acc, row) => {
+					acc[row.id] = row.name;
+					return acc;
+				}, {});
+			} else {
+				board.childMetadata = {};
+			}
+
 			return json(board);
 		}
 		// Return empty scaffold if new board
-		return json({ id, name: `board_${id.slice(0,6)}`, parentId: parentIdParam, depth: 0, nodes: [], connections: [], lineage: lineageRes.rows });
+		return json({ id, name: null, parentId: parentIdParam, depth: 0, nodes: [], connections: [], lineage: lineageRes.rows, childMetadata: {} });
 	} catch (error) {
 		console.error("GET board error:", error);
 		return json({ error: "Failed to load board" }, { status: 500 });
