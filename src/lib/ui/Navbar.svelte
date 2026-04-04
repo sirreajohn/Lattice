@@ -60,7 +60,10 @@
 
 		<!-- Path / Breadcrumbs -->
 		{#if isNestedBoard}
-			{@const backPath = nodesState.parentId && nodesState.parentId !== 'default' ? '/b/' + nodesState.parentId : '/'}
+			{@const backPath =
+				nodesState.parentId && nodesState.parentId !== "default"
+					? "/b/" + nodesState.parentId
+					: "/"}
 			<div
 				class="flex items-center gap-2 text-[var(--color-text-secondary)] font-mono text-xs overflow-x-auto no-scrollbar max-w-[50vw]"
 			>
@@ -131,7 +134,7 @@
 					class="w-1.5 h-1.5 rounded-full bg-amber-500/80 shadow-[0_0_4px_rgba(245,158,11,0.8)]"
 				></div>
 				<span class="text-[var(--color-text-secondary)]"
-					>Temp Session (No Save)</span
+					>Temp Session (data is not saved)</span
 				>
 			{:else}
 				<div
@@ -146,24 +149,56 @@
 				<!-- Circular User Profile -->
 				<!-- svelte-ignore a11y_click_events_have_key_events -->
 				<!-- svelte-ignore a11y_no_static_element_interactions -->
-				<div 
+				<div
 					class="w-7 h-7 rounded-full bg-[var(--color-accent)] text-[var(--color-canvas)] flex items-center justify-center font-bold text-xs cursor-pointer hover:opacity-80 transition-opacity"
-					onclick={() => showUserMenu = !showUserMenu}
+					onclick={() => (showUserMenu = !showUserMenu)}
 				>
 					{user.username.charAt(0).toUpperCase()}
 				</div>
 
 				<!-- Pillbox Dropdown -->
 				{#if showUserMenu}
-					<div class="absolute right-0 top-10 w-48 bg-[var(--color-surface)]/90 backdrop-blur-md border border-[var(--color-border)] rounded-lg shadow-xl p-4 z-[100] flex flex-col gap-3">
+					<div
+						class="absolute right-0 top-10 w-48 bg-[var(--color-surface)]/90 backdrop-blur-md border border-[var(--color-border)] rounded-lg shadow-xl p-4 z-[100] flex flex-col gap-3"
+					>
 						<div class="flex flex-col gap-1">
-							<span class="text-[9px] uppercase tracking-widest opacity-50">Signed in as</span>
-							<span class="text-[var(--color-text-primary)] font-bold truncate text-sm">{user.username}</span>
+							<span
+								class="text-[9px] uppercase tracking-widest opacity-50"
+								>Signed in as</span
+							>
+							<span
+								class="text-[var(--color-text-primary)] font-bold truncate text-sm"
+								>{user.username}</span
+							>
 						</div>
-						<div class="h-px w-full bg-[var(--color-border)] my-1"></div>
+						<div
+							class="h-px w-full bg-[var(--color-border)] my-1"
+						></div>
 						<form method="POST" action="/auth/logout">
-							<button type="submit" class="w-full text-left text-red-500 hover:text-red-400 text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-2">
-								<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+							<button
+								type="submit"
+								class="w-full text-left text-red-500 hover:text-red-400 text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-2"
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="12"
+									height="12"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="3"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									><path
+										d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"
+									></path><polyline points="16 17 21 12 16 7"
+									></polyline><line
+										x1="21"
+										y1="12"
+										x2="9"
+										y2="12"
+									></line></svg
+								>
 								Log Out
 							</button>
 						</form>
