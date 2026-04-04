@@ -4,7 +4,7 @@
 
 Lattice is an incredibly fluid infinite canvas application designed to bring spatial organization to your thoughts, architectures, and data. Whether you want to map out software diagrams, write dynamic sticky notes, or build structured nesting boards, Lattice renders it all seamlessly. 
 
-It is engineered from the ground up to be blazingly fast using Svelte 5, fully responsive across touch and desktop platforms, and highly secure for true production self-hosting.
+It is engineered from the ground up to be blazingly fast using Svelte 5, fully responsive across touch and desktop platforms, and highly secure for true production self-hosting with a local-first philosophy.
 
 ## ✨ Core Features
 
@@ -12,12 +12,12 @@ It is engineered from the ground up to be blazingly fast using Svelte 5, fully r
 - **Node Mechanics**: Draggable, resizable components including Markdown Text Notes, YouTube Video embeds, and nested 'Decks' or 'Columns'.
 - **Magnetic Connectivity**: Draw smooth, labeled bezier-curve connecting lines directly between Anchor points on any card to map out architectures.
 - **Hierarchical Nesting**: Drag nodes directly inside other 'Column' Decks to automatically inherit hierarchy. 
-- **Hybrid Storage Engine**:
-  - **Local Mode:** Completely offline, snappy browser `localStorage` integration for total privacy.
-  - **Cloud Mode:** Supabase integration for cross-device syncing, debounced Postgres saving, and real-time state tracking.
-- **Production-Ready Security**: Out-of-the-box Markdown sanitation (via `DOMPurify`) to prevent XSS, and strictly typed authentication flows.
-- **DevOps Perfected**: Pre-configured robust multi-stage Dockerfile utilizing SvelteKit's standalone Node adapter, optimizing it perfectly for self-hosting behind Cloudflare or NGINX.
-(marketing fluff honestly)
+- **Database Engine (PGlite)**:
+  - **Local Mode:** Uses an embedded PostgreSQL database (via PGlite) for fast, secure, local-first storage. No external cloud dependencies required.
+  - **Temp Mode:** An ephemeral, in-memory scratchpad mode where all changes disappear on page reload. Perfect for quick planning without cluttering your main space.
+- **Dynamic Theming**: Fully customizable user interfaces with multiple pre-built color palettes (Default Dark, Dracula, Nord, Monokai, Solarized) and customizable UI tokens.
+- **Local Authentication**: Secures your boards using `bcryptjs`-hashed authentication, handling user sessions and private boards out of the box.
+- **Production-Ready Security**: Features strict `.env` checks and out-of-the-box Markdown sanitation (via DOMPurify) to prevent XSS.
 
 ## Screenshots
 
@@ -32,53 +32,37 @@ Ensure you have Node 20+ installed.
 # Install dependencies
 npm install
 
-# Start the Vite development server
+# Start a dev env
 npm run dev
 ```
 
 Your app will be live at `http://localhost:5173`.
 
-## Task list
-- [ ] add image support
-- [ ] add file/link support
-- [ ] freeform draw tools.
-- [ ] change card text from md to rich text.
-- [ ] add keyboard shortcuts for tools.
-- [ ] maybe llm support??????? idk why this app needs it.
+## 📦 Deployment & Self-Hosting
 
+Lattice is completely self-contained and utilizes **Docker** alongside its local SQLite/PGlite-powered engine built with the SvelteKit Node Adapter. 
 
-## ☁️ Deployment & Self-Hosting
-
-Lattice is fully configured to be securely self-hosted utilizing **Docker** and **Supabase**, allowing you to bypass vendor lock-in.
-
-### 1. Environment Configuration
-Create a `.env` file at the root of your project:
-```env
-# Storage routing: 'local' | 'cloud'
-PUBLIC_STORAGE_MODE=cloud
-
-# Supabase cloud variables (Required for cloud mode)
-PUBLIC_SUPABASE_URL=https://<your-id>.supabase.co
-PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY=<your-anon-key>
-
-# Performance & Security Limits
-PUBLIC_DEBOUNCE_TIMEOUT_MS=5000
-PUBLIC_MAX_CARDS_PER_BOARD=500
-```
-
-### 2. Docker Containerization
+### Docker Containerization
 Lattice ships with an ultra-lightweight Multi-stage Alpine container configuration. You can boot the entire production-grade server in a single command:
 
 ```bash
 docker compose up -d --build
 ```
-> The container automatically installs native C++ bindings for Linux, strips development dependencies, and securely serves your application on port `5173`. 
+> The container handles dependencies, stripping development tooling, and securely serving the application. It is highly recommended to run this behind a reverse proxy like NGINX, Traefik, or an edge service like Cloudflare Tunnels.
 
 ## 🛠 Tech Stack
-* **Frontend**: Svelte 5, SvelteKit, TailwindCSS 4
-* **Backend Database**: Supabase (PostgreSQL), Supabase Auth (Google OAuth/PKCE)
+* **Frontend**: Svelte 5, SvelteKit, TailwindCSS v4
+* **Backend Database**: embedded PostgreSQL (PGlite)
+* **Authentication**: bcrypjs
 * **DevOps**: Docker, Node.js Adapter
 * **Security**: DOMPurify, Marked
+
+## 📝 Task list
+- [ ] Add image support
+- [ ] Add file/link support
+- [ ] Freeform draw tools
+- [ ] Change card text from md to rich text
+- [ ] Add keyboard shortcuts for tools
 
 ## 🤝 Contributing
 Currently managed and maintained by `sirreajohn`. Feel free to open issues or pull requests.
