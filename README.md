@@ -1,5 +1,7 @@
 # Lattice
 
+> Live at [lattice.sirreajohn.dev](https://lattice.sirreajohn.dev)
+
 ## 🌌 Overview
 
 Lattice is an incredibly fluid infinite canvas application designed to bring spatial organization to your thoughts, architectures, and data. Whether you want to map out software diagrams, write dynamic sticky notes, or build structured nesting boards, Lattice renders it all seamlessly. 
