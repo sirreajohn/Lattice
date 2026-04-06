@@ -8,7 +8,9 @@
 	let canvasElement;
 
 	function handlePointerDown(e) {
-		if (e.button === 1 || e.altKey) {
+		nodesState.selectedNodeId = null;
+		
+		if (e.button === 0 || e.button === 1 || e.altKey) {
 			e.preventDefault();
 			const startX = e.clientX;
 			const startY = e.clientY;
@@ -27,8 +29,6 @@
 
 			window.addEventListener("pointermove", handlePointerMove);
 			window.addEventListener("pointerup", handlePointerUp);
-		} else {
-			nodesState.selectedNodeId = null;
 		}
 	}
 
@@ -64,7 +64,7 @@
 	bind:this={canvasElement}
 	onpointerdown={handlePointerDown}
 	onwheel={handleWheel}
-	class="w-full h-screen relative overflow-hidden text-[var(--color-text-primary)] bg-[var(--color-canvas)] select-none"
+	class="w-full h-screen relative overflow-hidden text-[var(--color-text-primary)] bg-[var(--color-canvas)] select-none touch-none"
 	style="
 		background-image: radial-gradient(var(--color-border) 1.5px, transparent 1.5px);
 		background-position: {canvasState.x}px {canvasState.y}px;
