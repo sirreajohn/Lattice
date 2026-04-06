@@ -84,14 +84,15 @@ export async function PUT({ params, request, locals }) {
 		}
 		
 		await db.query(`
-			INSERT INTO boards (id, name, parent_id, depth, nodes, connections, user_id, updated_at) 
-			VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8)
+			INSERT INTO boards (id, name, parent_id, depth, nodes, connections, drawings, user_id, updated_at) 
+			VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, $8, $9)
 			ON CONFLICT (id) DO UPDATE SET 
 				name = EXCLUDED.name, 
 				parent_id = EXCLUDED.parent_id,
 				depth = EXCLUDED.depth,
 				nodes = EXCLUDED.nodes, 
 				connections = EXCLUDED.connections, 
+				drawings = EXCLUDED.drawings,
 				user_id = COALESCE(boards.user_id, EXCLUDED.user_id),
 				updated_at = EXCLUDED.updated_at
 		`, [
@@ -101,6 +102,7 @@ export async function PUT({ params, request, locals }) {
 			payload.depth || 0,
 			JSON.stringify(payload.nodes || []), 
 			JSON.stringify(payload.connections || []), 
+			JSON.stringify(payload.drawings || []),
 			locals.user ? locals.user.id : null,
 			new Date().toISOString()
 		]);

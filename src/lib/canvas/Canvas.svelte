@@ -3,11 +3,56 @@
 	import { nodesState } from "$lib/state/nodes.svelte.js";
 	import BaseNode from "$lib/nodes/BaseNode.svelte";
 	import ConnectionLines from "./ConnectionLines.svelte";
+	import CanvasDrawings from "./CanvasDrawings.svelte";
 
 	let { children } = $props();
-	let canvasElement;
+	/** @type {HTMLDivElement} */
+	let canvasElement = $state();
+	let activeDrawingId = $state(null);
 
 	function handlePointerDown(e) {
+		const isLeftClick = e.button === 0;
+
+		// Drawing logic
+		if (nodesState.activeTool === 'pencil' && isLeftClick) {
+			nodesState.selectedNodeId = null;
+			const canvasPos = canvasState.screenToCanvas(e.clientX, e.clientY);
+			activeDrawingId = crypto.randomUUID();
+			
+			const newDrawing = {
+				id: activeDrawingId,
+				color: nodesState.drawingColor,
+				width: nodesState.drawingWidth,
+				points: [canvasPos]
+			};
+			nodesState.addDrawing(newDrawing);
+
+			function handlePencilMove(ev) {
+				const pt = canvasState.screenToCanvas(ev.clientX, ev.clientY);
+				const d = nodesState.drawings.find(d => d.id === activeDrawingId);
+				if (d) {
+					d.points.push(pt);
+				}
+			}
+
+			function handlePencilUp() {
+				nodesState.saveToStorage();
+				window.removeEventListener("pointermove", handlePencilMove);
+				window.removeEventListener("pointerup", handlePencilUp);
+				activeDrawingId = null;
+			}
+
+			window.addEventListener("pointermove", handlePencilMove);
+			window.addEventListener("pointerup", handlePencilUp);
+			return; 
+		}
+
+		if (nodesState.activeTool === 'eraser') {
+			// Eraser click-and-drag logic is largely handled natively by CanvasDrawings onpointerenter
+			// We just skip panning
+			return;
+		}
+
 		nodesState.selectedNodeId = null;
 		
 		if (e.button === 0 || e.button === 1 || e.altKey) {
@@ -82,7 +127,9 @@
 				canvas.width = width;
 				canvas.height = height;
 				const ctx = canvas.getContext('2d');
-				ctx.drawImage(img, 0, 0, width, height);
+				if (ctx) {
+					ctx.drawImage(img, 0, 0, width, height);
+				}
 				
 				const dataUrl = canvas.toDataURL('image/webp', 0.8);
 				
@@ -157,12 +204,14 @@
 		background-image: radial-gradient(var(--color-border) 1.5px, transparent 1.5px);
 		background-position: {canvasState.x}px {canvasState.y}px;
 		background-size: {30 * canvasState.scale}px {30 * canvasState.scale}px;
+		cursor: {nodesState.activeTool === 'pencil' || nodesState.activeTool === 'eraser' ? 'crosshair' : 'default'};
 	"
 >
 	<div
 		class="absolute top-0 left-0 w-0 h-0 overflow-visible origin-top-left"
 		style="transform: translate({canvasState.x}px, {canvasState.y}px) scale({canvasState.scale})"
 	>
+		<CanvasDrawings />
 		<ConnectionLines />
 		{#each nodesState.nodes.filter((n) => !n.parentId) as node (node.id)}
 			<BaseNode {node} />
