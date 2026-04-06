@@ -1,5 +1,4 @@
 @import 'tailwindcss';
-@import 'tailwindcss-animate';
 
 @theme {
   --color-canvas: #0a0a0a;
@@ -51,3 +50,20 @@ body {
   background-image: radial-gradient(var(--color-border) 1.5px, transparent 1.5px);
   background-size: 30px 30px;
 }
+
+/* Animation utilities (replaces tailwindcss-animate) */
+@keyframes enter {
+  from { opacity: var(--tw-enter-opacity, 1); transform: translate3d(var(--tw-enter-translate-x, 0), var(--tw-enter-translate-y, 0), 0) scale3d(var(--tw-enter-scale, 1), var(--tw-enter-scale, 1), var(--tw-enter-scale, 1)) rotate(var(--tw-enter-rotate, 0)); }
+}
+
+.animate-in {
+  animation: enter 0.2s ease-out;
+  --tw-enter-opacity: 1;
+  --tw-enter-translate-x: 0;
+  --tw-enter-translate-y: 0;
+  --tw-enter-scale: 1;
+  --tw-enter-rotate: 0;
+}
+
+.fade-in { --tw-enter-opacity: 0; }
+.slide-in-from-bottom-2 { --tw-enter-translate-y: 0.5rem; }

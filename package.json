@@ -1,7 +1,7 @@
 {
 	"name": "lattice",
 	"private": true,
-	"version": "0.0.1",
+	"version": "0.2.0",
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
@@ -31,7 +31,6 @@
 		"marked": "^17.0.5",
 		"pptx-preview": "^1.0.7",
 		"quill": "^2.0.3",
-		"tailwindcss-animate": "^1.0.7",
 		"xlsx": "^0.18.5"
 	}
 }
