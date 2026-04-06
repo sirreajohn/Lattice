@@ -43,6 +43,60 @@ export const PRESETS = {
 		'text-secondary': '#657b83',
 		accent: '#268bd2',
 		lines: '#859900'
+	},
+	paper: {
+		canvas: '#fdf6e3',
+		surface: '#eee8d5',
+		border: '#d3368222',
+		'text-primary': '#586e75',
+		'text-secondary': '#93a1a1',
+		accent: '#d33682',
+		lines: '#cb4b16'
+	},
+	minimalist: {
+		canvas: '#ffffff',
+		surface: '#f9f9f9',
+		border: '#e5e5e5',
+		'text-primary': '#171717',
+		'text-secondary': '#737373',
+		accent: '#000000',
+		lines: '#a3a3a3'
+	},
+	hacker: {
+		canvas: '#000000',
+		surface: '#0d0d0d',
+		border: '#00ff4133',
+		'text-primary': '#00ff41',
+		'text-secondary': '#008f11',
+		accent: '#fdee00',
+		lines: '#ff003c'
+	},
+	retrowave: {
+		canvas: '#1a0633',
+		surface: '#2d0b5a',
+		border: '#ff00ff44',
+		'text-primary': '#33ff00',
+		'text-secondary': '#ff00ff',
+		accent: '#00ffff',
+		lines: '#ff7700'
+	},
+	synthwave: {
+		canvas: '#241744',
+		surface: '#2f245c',
+		border: '#ff71ce33',
+		'text-primary': '#ffffff',
+		'text-secondary': '#ff71ce',
+		accent: '#01cdfe',
+		lines: '#b967ff'
+	},
+	bubblegum: {
+		canvas: '#fff0f3',
+		surface: '#ffccd5',
+		border: '#ff8fa344',
+		'text-primary': '#590d22',
+		'text-secondary': '#c9184a',
+		accent: '#ff4d6d',
+		lines: '#80ffdb'
 	}
 };
 

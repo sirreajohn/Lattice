@@ -3,12 +3,59 @@
 	import { nodesState } from "$lib/state/nodes.svelte.js";
 	import BaseNode from "$lib/nodes/BaseNode.svelte";
 	import ConnectionLines from "./ConnectionLines.svelte";
+	import CanvasDrawings from "./CanvasDrawings.svelte";
 
 	let { children } = $props();
-	let canvasElement;
+	/** @type {HTMLDivElement} */
+	let canvasElement = $state();
+	let activeDrawingId = $state(null);
 
 	function handlePointerDown(e) {
-		if (e.button === 1 || e.altKey) {
+		const isLeftClick = e.button === 0;
+
+		// Drawing logic
+		if (nodesState.activeTool === 'pencil' && isLeftClick) {
+			nodesState.selectedNodeId = null;
+			const canvasPos = canvasState.screenToCanvas(e.clientX, e.clientY);
+			activeDrawingId = crypto.randomUUID();
+			
+			const newDrawing = {
+				id: activeDrawingId,
+				color: nodesState.drawingColor,
+				width: nodesState.drawingWidth,
+				points: [canvasPos]
+			};
+			nodesState.addDrawing(newDrawing);
+
+			function handlePencilMove(ev) {
+				const pt = canvasState.screenToCanvas(ev.clientX, ev.clientY);
+				const d = nodesState.drawings.find(d => d.id === activeDrawingId);
+				if (d) {
+					d.points.push(pt);
+				}
+			}
+
+			function handlePencilUp() {
+				nodesState.saveToStorage();
+				window.removeEventListener("pointermove", handlePencilMove);
+				window.removeEventListener("pointerup", handlePencilUp);
+				activeDrawingId = null;
+			}
+
+			window.addEventListener("pointermove", handlePencilMove);
+			window.addEventListener("pointerup", handlePencilUp);
+			return; 
+		}
+
+		if (nodesState.activeTool === 'eraser') {
+			// Eraser click-and-drag logic is largely handled natively by CanvasDrawings onpointerenter
+			// We just skip panning
+			return;
+		}
+
+		nodesState.selectedNodeId = null;
+		
+		if (e.button === 0 || e.button === 1 || e.altKey) {
 			e.preventDefault();
 			const startX = e.clientX;
 			const startY = e.clientY;
@@ -27,8 +74,6 @@
 
 			window.addEventListener("pointermove", handlePointerMove);
 			window.addEventListener("pointerup", handlePointerUp);
-		} else {
-			nodesState.selectedNodeId = null;
 		}
 	}
 
@@ -58,23 +103,115 @@
 		canvasState.y = mouseY - (mouseY - canvasState.y) * actualScaleChange;
 		canvasState.scale = newScale;
 	}
+
+	function processImageFile(file, x, y, isScreenPos) {
+		const reader = new FileReader();
+		reader.onload = (event) => {
+			const img = new Image();
+			img.onload = () => {
+				const canvas = document.createElement('canvas');
+				let width = img.width;
+				let height = img.height;
+				const MAX_DIM = 1024;
+				
+				if (width > MAX_DIM || height > MAX_DIM) {
+					if (width > height) {
+						height = Math.round(height * (MAX_DIM / width));
+						width = MAX_DIM;
+					} else {
+						width = Math.round(width * (MAX_DIM / height));
+						height = MAX_DIM;
+					}
+				}
+				
+				canvas.width = width;
+				canvas.height = height;
+				const ctx = canvas.getContext('2d');
+				if (ctx) {
+					ctx.drawImage(img, 0, 0, width, height);
+				}
+				
+				const dataUrl = canvas.toDataURL('image/webp', 0.8);
+				
+				let nodeW = width;
+				let nodeH = height;
+				if (nodeW > 400) {
+					nodeH = Math.round(height * (400 / width));
+					nodeW = 400;
+				}
+
+				let finalX = x;
+				let finalY = y;
+				if (isScreenPos) {
+					const canvasPos = canvasState.screenToCanvas(x, y);
+					finalX = canvasPos.x;
+					finalY = canvasPos.y;
+				}
+
+				const id = nodesState.addNode('image', finalX, finalY, { src: dataUrl, alt: file.name || 'Pasted Image' });
+				const node = nodesState.nodes.find(n => n.id === id);
+				if (node) {
+					node.width = nodeW;
+					node.height = nodeH;
+					nodesState.saveToStorage();
+				}
+			};
+			img.src = event.target.result;
+		};
+		reader.readAsDataURL(file);
+	}
+
+	function handleDrop(e) {
+		e.preventDefault();
+		if (e.dataTransfer && e.dataTransfer.files) {
+			for (let i = 0; i < e.dataTransfer.files.length; i++) {
+				const file = e.dataTransfer.files[i];
+				if (file.type.startsWith('image/')) {
+					processImageFile(file, e.clientX, e.clientY, true);
+					break; 
+				}
+			}
+		}
+	}
+
+	function handlePaste(e) {
+		if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+		if (e.clipboardData && e.clipboardData.items) {
+			for (let i = 0; i < e.clipboardData.items.length; i++) {
+				const item = e.clipboardData.items[i];
+				if (item.kind === 'file' && item.type.startsWith('image/')) {
+					const blob = item.getAsFile();
+					if (blob) {
+						processImageFile(blob, window.innerWidth / 2, window.innerHeight / 2, true);
+						break;
+					}
+				}
+			}
+		}
+	}
 </script>
+
+<svelte:window onpaste={handlePaste} />
 
 <div
 	bind:this={canvasElement}
 	onpointerdown={handlePointerDown}
 	onwheel={handleWheel}
-	class="w-full h-screen relative overflow-hidden text-[var(--color-text-primary)] bg-[var(--color-canvas)] select-none"
+	ondragover={(e) => e.preventDefault()}
+	ondrop={handleDrop}
+	class="w-full h-screen relative overflow-hidden text-[var(--color-text-primary)] bg-[var(--color-canvas)] select-none touch-none"
 	style="
 		background-image: radial-gradient(var(--color-border) 1.5px, transparent 1.5px);
 		background-position: {canvasState.x}px {canvasState.y}px;
 		background-size: {30 * canvasState.scale}px {30 * canvasState.scale}px;
+		cursor: {nodesState.activeTool === 'pencil' || nodesState.activeTool === 'eraser' ? 'crosshair' : 'default'};
 	"
 >
 	<div
 		class="absolute top-0 left-0 w-0 h-0 overflow-visible origin-top-left"
 		style="transform: translate({canvasState.x}px, {canvasState.y}px) scale({canvasState.scale})"
 	>
+		<CanvasDrawings />
 		<ConnectionLines />
 		{#each nodesState.nodes.filter((n) => !n.parentId) as node (node.id)}
 			<BaseNode {node} />

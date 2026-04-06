@@ -69,6 +69,12 @@ export async function initDb() {
 			if (!e.message.includes('already exists')) throw e;
 		}
 
+		try {
+			await db.query(`ALTER TABLE boards ADD COLUMN IF NOT EXISTS drawings JSONB DEFAULT '[]'::jsonb;`);
+		} catch (e) {
+			if (!e.message.includes('already exists')) throw e;
+		}
+
 		isDbInitialized = true;
 	} catch (error) {
 		console.error("Failed to initialize Server PGlite:", error);

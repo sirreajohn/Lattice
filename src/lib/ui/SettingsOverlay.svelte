@@ -68,11 +68,11 @@
 								>
 									<option value="custom">Custom</option>
 									<optgroup label="Presets">
-										<option value="default">Default Dark</option>
-										<option value="dracula">Dracula</option>
-										<option value="nord">Nord</option>
-										<option value="monokai">Monokai</option>
-										<option value="solarized">Solarized</option>
+										{#each Object.keys(PRESETS) as presetId}
+											<option value={presetId}>
+												{presetId.charAt(0).toUpperCase() + presetId.slice(1)}
+											</option>
+										{/each}
 									</optgroup>
 								</select>
 							</div>

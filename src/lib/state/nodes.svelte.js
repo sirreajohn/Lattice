@@ -24,6 +24,12 @@ export class NodesState {
 	depth = $state(0);
 	lineage = $state([]); // Array of {id, name} ancestors
 
+	// Freeform Drawing State
+	drawings = $state([]);
+	activeTool = $state('pointer'); // 'pointer', 'pencil', 'eraser'
+	drawingColor = $state('var(--color-text-primary)');
+	drawingWidth = $state(3);
+
 	// Ephemeral board storage to preserve simulated database state when routing client-side in temp mode
 	_tempCache = new Map();
 
@@ -39,6 +45,16 @@ export class NodesState {
 		if (typeof window !== 'undefined') {
 			this.loadFromStorage();
 		}
+	}
+
+	addDrawing(drawing) {
+		this.drawings.push(drawing);
+		this.saveToStorage();
+	}
+
+	removeDrawing(id) {
+		this.drawings = this.drawings.filter(d => d.id !== id);
+		this.saveToStorage();
 	}
 
 	addNode(type, x, y, data = {}) {
@@ -133,6 +149,7 @@ export class NodesState {
 						const cached = this._tempCache.get(this.boardId);
 						this.nodes = JSON.parse(JSON.stringify(cached.nodes));
 						this.connections = JSON.parse(JSON.stringify(cached.connections));
+						this.drawings = JSON.parse(JSON.stringify(cached.drawings || []));
 						this.parentId = cached.parentId || seedParentId || null;
 						this.depth = cached.depth || seedDepth || 0;
 						this.lineage = this._computeTempLineage(this.boardId);
@@ -158,6 +175,7 @@ export class NodesState {
 				if (localData) {
 					if (localData.nodes) this.nodes = localData.nodes;
 					if (localData.connections) this.connections = localData.connections;
+					if (localData.drawings) this.drawings = localData.drawings;
 					this.parentId = localData.parent_id ?? seedParentId;
 					this.depth = localData.depth !== undefined && localData.depth !== 0 ? localData.depth : seedDepth;
 					this.lineage = localData.lineage || [];
@@ -194,7 +212,8 @@ export class NodesState {
 						parentId: this.parentId,
 						depth: this.depth,
 						nodes: JSON.parse(JSON.stringify(this.nodes)),
-						connections: JSON.parse(JSON.stringify(this.connections))
+						connections: JSON.parse(JSON.stringify(this.connections)),
+						drawings: JSON.parse(JSON.stringify(this.drawings))
 					});
 					return;
 				}
@@ -207,7 +226,8 @@ export class NodesState {
 						parentId: this.parentId,
 						depth: this.depth,
 						nodes: this.nodes,
-						connections: this.connections
+						connections: this.connections,
+						drawings: this.drawings
 					})
 				});
 			}

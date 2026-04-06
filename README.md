@@ -59,12 +59,17 @@ docker compose up -d --build
 * **DevOps**: Docker, Node.js Adapter
 * **Security**: DOMPurify, Marked
 
-## 📝 Task list
-- [ ] Add image support
+## 📝 Feature list
+- [X] Add image support
 - [ ] Add file/link support
-- [ ] Freeform draw tools
+- [X] Freeform draw tools
 - [ ] Change card text from md to rich text
 - [ ] Add keyboard shortcuts for tools
+- [ ] overlay card for grouping cards with a title.
+- [ ] document card to render in full html/md
+- [ ] kanban board????
+- [ ] imports and exports of data to local.
+- [ ] maybe usefull AI features, like semantic vectors to find similar cards or cluster cards of similar topics.
 
 ## 🤝 Contributing
 Currently managed and maintained by `sirreajohn`. Feel free to open issues or pull requests.
