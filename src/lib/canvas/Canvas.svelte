@@ -285,7 +285,7 @@
 	"
 >
 	<div
-		class="absolute top-0 left-0 w-0 h-0 overflow-visible origin-top-left"
+		class="absolute top-0 left-0 w-0 h-0 overflow-visible origin-top-left canvas-content"
 		style="transform: translate({canvasState.x}px, {canvasState.y}px) scale({canvasState.scale})"
 	>
 		<CanvasDrawings />
