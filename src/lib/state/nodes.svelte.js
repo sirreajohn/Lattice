@@ -400,6 +400,31 @@ export class NodesState {
 		}
 		return path;
 	}
+
+	/**
+	 * Returns all boards currently known to the session (cache + active)
+	 * Useful for "Board Management" in temp mode.
+	 */
+	getKnownBoards() {
+		const boards = [];
+		for (const [id, data] of this._tempCache.entries()) {
+			boards.push({
+				id,
+				name: globalMetadata.getName(id),
+				updated_at: new Date().toISOString() // Temp mode doesn't track timestamps strictly
+			});
+		}
+		// Also include current board if not in cache yet
+		if (this.boardId && !this._tempCache.has(this.boardId)) {
+			boards.push({
+				id: this.boardId,
+				name: globalMetadata.getName(this.boardId),
+				updated_at: new Date().toISOString()
+			});
+		}
+		return boards;
+	}
+
 	getCenter() {
 		if (typeof window === 'undefined') return { x: 0, y: 0 };
 		const screenCenter = {
@@ -472,6 +497,53 @@ export class NodesState {
 			this.saveToStorage();
 		}
 	}
+
+	exportState() {
+		// Flush current active state to cache
+		this.forceSave();
+
+		const boards = [];
+		for (const [id, data] of this._tempCache.entries()) {
+			boards.push({
+				id,
+				name: globalMetadata.getName(id),
+				parent_id: data.parentId,
+				depth: data.depth,
+				nodes: data.nodes,
+				connections: data.connections,
+				drawings: data.drawings
+			});
+		}
+
+		return {
+			version: 1,
+			exportedAt: new Date().toISOString(),
+			boards
+		};
+	}
+
+	importState(payload) {
+		if (!payload.boards || !Array.isArray(payload.boards)) return false;
+
+		// Clear current session
+		this._tempCache.clear();
+
+		// Populate cache
+		for (const board of payload.boards) {
+			this._tempCache.set(board.id, {
+				parentId: board.parent_id,
+				depth: board.depth || 0,
+				nodes: board.nodes || [],
+				connections: board.connections || [],
+				drawings: board.drawings || []
+			});
+			if (board.name) globalMetadata.setName(board.id, board.name);
+		}
+
+		// Reload current board if possible
+		this.loadFromStorage();
+		return true;
+	}
 }
 
 export const nodesState = new NodesState();
@@ -499,6 +571,14 @@ export class GlobalMetadata {
 	getName(id) {
 		if (id === 'default') return 'Default Board';
 		return this.boardNames[id] || `board_${id.slice(0, 6)}`;
+	}
+
+	getAllNames() {
+		return $state.snapshot(this.boardNames);
+	}
+
+	importNames(names) {
+		Object.assign(this.boardNames, names);
 	}
 }
 

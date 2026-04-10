@@ -3,6 +3,7 @@
 	import { nodesState } from "$lib/state/nodes.svelte.js";
 	import { canvasState } from "$lib/state/canvas.svelte.js";
 	import { shortcutsState } from "$lib/state/shortcuts.svelte.js";
+	import { env } from "$env/dynamic/public";
 
 	let activeTab = $state("customization");
 	/** @type {string | null} */
@@ -10,6 +11,14 @@
 	/** @type {Array<any>} */
 	let userBoards = $state([]);
 	let loadingBoards = $state(false);
+
+	// Data management state
+	let isExporting = $state(false);
+	let isImporting = $state(false);
+	/** @type {string | null} */
+	let importStatus = $state(null);
+	/** @type {HTMLInputElement | null} */
+	let fileInput = $state(null);
 
 	$effect(() => {
 		if (themeState.isOpen && activeTab === "boards") {
@@ -20,6 +29,12 @@
 	async function fetchBoards() {
 		loadingBoards = true;
 		try {
+			if (env.PUBLIC_DB_MODE === 'temp') {
+				// Filter out 'default' board and map to expected UI structure
+				userBoards = nodesState.getKnownBoards().filter(b => b.id !== 'default');
+				return;
+			}
+
 			const res = await fetch("/api/boards");
 			if (res.ok) {
 				const data = await res.json();
@@ -61,6 +76,12 @@
 			return;
 
 		try {
+			if (env.PUBLIC_DB_MODE === 'temp') {
+				nodesState._tempCache.delete(boardId);
+				userBoards = userBoards.filter((b) => b.id !== boardId);
+				return;
+			}
+
 			const res = await fetch(`/api/boards/${boardId}`, {
 				method: "DELETE",
 			});
@@ -72,6 +93,105 @@
 		} catch (e) {
 			console.error("Delete error", e);
 			alert("Failed to delete board");
+		}
+	}
+
+	async function handleExport() {
+		isExporting = true;
+		try {
+			let blob;
+			if (env.PUBLIC_DB_MODE === 'temp') {
+				const payload = nodesState.exportState();
+				const jsonStr = JSON.stringify(payload);
+				const encoded = new TextEncoder().encode(jsonStr);
+
+				// Client-side CompressionStream (supported in modern browsers)
+				const cs = new CompressionStream('gzip');
+				const writer = cs.writable.getWriter();
+				writer.write(encoded);
+				writer.close();
+
+				const compressed = await new Response(cs.readable).arrayBuffer();
+				blob = new Blob([compressed], { type: 'application/octet-stream' });
+			} else {
+				const res = await fetch('/api/data/export');
+				if (!res.ok) {
+					const err = await res.json();
+					alert(err.error || 'Export failed');
+					return;
+				}
+				blob = await res.blob();
+			}
+
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = `lattice-backup-${new Date().toISOString().slice(0, 10)}.lattice`;
+			a.click();
+			URL.revokeObjectURL(url);
+		} catch (e) {
+			console.error('Export error', e);
+			alert('Failed to export data');
+		} finally {
+			isExporting = false;
+		}
+	}
+
+	/** @param {Event} e */
+	async function handleImport(e) {
+		const target = /** @type {HTMLInputElement} */ (e.target);
+		const file = target.files?.[0];
+		if (!file) return;
+
+		if (!file.name.endsWith('.lattice')) {
+			alert('Please select a .lattice backup file.');
+			target.value = '';
+			return;
+		}
+
+		if (!confirm('This will merge imported data with your existing boards. Continue?')) {
+			target.value = '';
+			return;
+		}
+
+		isImporting = true;
+		importStatus = null;
+		try {
+			const arrayBuffer = await file.arrayBuffer();
+			
+			if (env.PUBLIC_DB_MODE === 'temp') {
+				// Client-side Decompression
+				const ds = new DecompressionStream('gzip');
+				const writer = ds.writable.getWriter();
+				writer.write(new Uint8Array(arrayBuffer));
+				writer.close();
+
+				const decompressed = await new Response(ds.readable).text();
+				const payload = JSON.parse(decompressed);
+				
+				if (nodesState.importState(payload)) {
+					importStatus = `Imported ${payload.boards?.length || 0} board(s) successfully to session.`;
+				} else {
+					importStatus = 'Invalid backup file format';
+				}
+			} else {
+				const res = await fetch('/api/data/import', {
+					method: 'POST',
+					body: arrayBuffer,
+				});
+				const result = await res.json();
+				if (res.ok) {
+					importStatus = `Imported ${result.imported} board(s) successfully${result.skipped > 0 ? `, ${result.skipped} skipped` : ''}.`;
+				} else {
+					importStatus = result.error || 'Import failed';
+				}
+			}
+		} catch (err) {
+			console.error('Import error', err);
+			importStatus = 'Failed to import data';
+		} finally {
+			isImporting = false;
+			target.value = '';
 		}
 	}
 
@@ -186,6 +306,15 @@
 					onclick={() => (activeTab = "boards")}
 				>
 					Board Management
+				</button>
+				<button
+					class="w-full text-left px-3 py-2 rounded-md font-medium text-sm transition-colors mt-1 {activeTab ===
+					'data'
+						? 'bg-[var(--color-accent)]/20 text-[var(--color-accent)]'
+						: 'text-[var(--color-text-primary)] hover:bg-neutral-800'}"
+					onclick={() => (activeTab = "data")}
+				>
+					Data Management
 				</button>
 			</div>
 
@@ -358,7 +487,9 @@
 						account or device. If you've lost track of a board on
 						the canvas, you can reinsert it here. Reinserting links
 						the board node to its original historical data.
-						<b>This feature is not available in temp sessions.</b>
+						{#if env.PUBLIC_DB_MODE === 'temp'}
+							<br/><b class="text-[var(--color-accent)]">Showing in-memory boards for this scratch session.</b>
+						{/if}
 					</p>
 
 					<div class="space-y-3">
@@ -417,6 +548,104 @@
 						{/if}
 					</div>
 				</div>
+			{:else if activeTab === "data"}
+				<!-- Data Management Area -->
+				<div class="flex-1 overflow-y-auto p-8 relative">
+					<button
+						class="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-neutral-800 rounded transition-colors"
+						onclick={() => (themeState.isOpen = false)}
+						aria-label="Close"
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+					</button>
+
+					<h2 class="text-2xl font-bold text-[var(--color-text-primary)] mb-4">Data Management</h2>
+					<p class="text-sm text-[var(--color-text-secondary)] mb-8 max-w-lg">
+						Secure your workspace by downloading portable backups or restoring previous sessions. All data is compressed for efficiency.
+					</p>
+
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+						<!-- Export Card -->
+						<div class="group relative flex flex-col bg-[var(--color-canvas)] border border-[var(--color-border)] rounded-xl p-6 transition-all hover:border-[var(--color-accent)]/40 hover:shadow-2xl hover:shadow-[var(--color-accent)]/5 shadow-sm">
+							<div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+								<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+							</div>
+							
+							<h3 class="text-lg font-bold text-[var(--color-text-primary)] mb-2">Export Workspace</h3>
+							<p class="text-xs text-[var(--color-text-secondary)] leading-relaxed mb-8 flex-1">
+								Generate a <code class="text-[var(--color-accent)] font-bold">.lattice</code> file containing all your boards, nodes, drawings, and connections. Perfect for backups or moving to another device.
+							</p>
+
+							<button
+								onclick={handleExport}
+								disabled={isExporting}
+								class="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-sm font-bold uppercase tracking-widest transition-all
+									{isExporting
+										? 'bg-neutral-800 text-neutral-500 cursor-wait'
+										: 'bg-[var(--color-accent)] text-[var(--color-canvas)] hover:scale-[1.02] hover:shadow-lg hover:shadow-[var(--color-accent)]/20 active:scale-[0.98] cursor-pointer'}"
+							>
+								{#if isExporting}
+									<span class="animate-pulse">Preparing...</span>
+								{:else}
+									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+									Download Backup
+								{/if}
+							</button>
+						</div>
+
+						<!-- Import Card -->
+						<div class="group relative flex flex-col bg-[var(--color-canvas)] border border-[var(--color-border)] rounded-xl p-6 transition-all hover:border-[var(--color-accent)]/40 hover:shadow-2xl hover:shadow-[var(--color-accent)]/5 shadow-sm">
+							<div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+								<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+							</div>
+
+							<h3 class="text-lg font-bold text-[var(--color-text-primary)] mb-2">Import Data</h3>
+							<p class="text-xs text-[var(--color-text-secondary)] leading-relaxed mb-8 flex-1">
+								Restore data from a backup file. This will merge the imported boards with your existing workspace. Only <code class="text-[var(--color-accent)] font-bold">.lattice</code> files are supported.
+							</p>
+
+							<div class="flex flex-col gap-3">
+								<input
+									bind:this={fileInput}
+									type="file"
+									accept=".lattice"
+									onchange={handleImport}
+									class="hidden"
+									id="lattice-import-input"
+								/>
+								<button
+									onclick={() => fileInput?.click()}
+									disabled={isImporting}
+									class="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-sm font-bold uppercase tracking-widest transition-all
+										{isImporting
+											? 'bg-neutral-800 text-neutral-500 cursor-wait'
+											: 'bg-[var(--color-surface)] text-[var(--color-text-primary)] border border-[var(--color-border)] hover:border-[var(--color-accent)] hover:bg-[var(--color-surface)] active:scale-[0.98] cursor-pointer shadow-sm'}"
+								>
+									{#if isImporting}
+										<span class="animate-pulse">Processing...</span>
+									{:else}
+										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+										Import Backup
+									{/if}
+								</button>
+								
+								{#if importStatus}
+									<div class="mt-2 px-3 py-2 rounded flex items-center gap-2 text-[10px] font-mono border {importStatus.startsWith('Imported') ? 'bg-green-500/5 text-green-400 border-green-500/20' : 'bg-red-500/5 text-red-400 border-red-500/20'}">
+										<div class="w-1 h-1 rounded-full {importStatus.startsWith('Imported') ? 'bg-green-400 animate-pulse' : 'bg-red-400'}"></div>
+										{importStatus}
+									</div>
+								{/if}
+							</div>
+						</div>
+					</div>
+
+						<!-- Info -->
+						<div class="mt-4 p-3 rounded-md bg-[var(--color-canvas)] border border-[var(--color-border)] text-[10px] font-mono text-[var(--color-text-secondary)] leading-relaxed">
+							<strong class="text-[var(--color-text-primary)]">Format:</strong> <code>.lattice</code> — compressed binary backup.<br/>
+							<strong class="text-[var(--color-text-primary)]">Scope:</strong> All boards owned by your account.<br/>
+							<strong class="text-[var(--color-text-primary)]">Import behaviour:</strong> Existing boards are overwritten if IDs match.
+						</div>
+					</div>
 			{/if}
 		</div>
 	</div>
