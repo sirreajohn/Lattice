@@ -166,9 +166,13 @@
 		isImporting = true;
 		importStatus = null;
 		try {
+			const textPayload = await file.text();
 			const res = await fetch("/api/data/import", {
 				method: "POST",
-				body: file,
+				headers: {
+					"Content-Type": "application/json"
+				},
+				body: textPayload,
 			});
 			const result = await res.json();
 			
