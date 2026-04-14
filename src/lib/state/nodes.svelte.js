@@ -489,7 +489,7 @@ export class NodesState {
 			sheetNames: ["Sheet1"],
 			activeSheet: 0,
 		};
-		const id = this.addNode("docs", center.x - 275, center.y - 200, { type: "spreadsheet", content: emptySheet });
+		const id = this.addNode("sheet", center.x - 275, center.y - 200, { type: "spreadsheet", content: emptySheet });
 		const node = this.nodes.find((n) => n.id === id);
 		if (node) {
 			node.width = 550;
@@ -498,12 +498,40 @@ export class NodesState {
 		}
 	}
 
-	exportState() {
+	exportState(boardIds = null) {
 		// Flush current active state to cache
 		this.forceSave();
 
+		const boardsToExport = new Set();
+		if (boardIds && boardIds.length > 0) {
+			// Initialize set with requested boards
+			for (const id of boardIds) {
+				if (this._tempCache.has(id)) {
+					boardsToExport.add(id);
+				}
+			}
+			
+			// Recursively add children
+			let addedNew = true;
+			while (addedNew) {
+				addedNew = false;
+				for (const [id, data] of this._tempCache.entries()) {
+					if (!boardsToExport.has(id) && data.parentId && boardsToExport.has(data.parentId)) {
+						boardsToExport.add(id);
+						addedNew = true;
+					}
+				}
+			}
+		} else {
+			// Export all boards if no filter
+			for (const id of this._tempCache.keys()) {
+				boardsToExport.add(id);
+			}
+		}
+
 		const boards = [];
-		for (const [id, data] of this._tempCache.entries()) {
+		for (const id of boardsToExport) {
+			const data = this._tempCache.get(id);
 			boards.push({
 				id,
 				name: globalMetadata.getName(id),

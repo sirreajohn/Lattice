@@ -7,6 +7,7 @@
 	import VideoNode from './VideoNode.svelte';
 	import ImageNode from './ImageNode.svelte';
 	import DocsNode from './DocsNode.svelte';
+	import SheetNode from './SheetNode.svelte';
 
 	let { node } = $props();
 
@@ -210,9 +211,14 @@
 		video: VideoNode,
 		image: ImageNode,
 		docs: DocsNode,
+		sheet: SheetNode,
 	};
 
-	let NodeComponent = $derived(typeConfig[node.type]);
+	let NodeComponent = $derived(
+		node.type === 'docs' && node.data?.type === 'spreadsheet' 
+		? SheetNode 
+		: typeConfig[node.type]
+	);
 	
 	let isTopTarget = $derived(nodesState.draftConnection?.targetNodeId === node.id && nodesState.draftConnection?.targetPort === 'top');
 	let isBottomTarget = $derived(nodesState.draftConnection?.targetNodeId === node.id && nodesState.draftConnection?.targetPort === 'bottom');

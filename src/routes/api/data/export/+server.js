@@ -3,7 +3,7 @@ import { db, initDb } from '$lib/server/db.js';
 import { env } from '$env/dynamic/public';
 
 /** @param {import('@sveltejs/kit').RequestEvent} event */
-export async function GET({ locals }) {
+export async function GET({ url, locals }) {
 	if (env.PUBLIC_DB_MODE === 'temp') {
 		return json({ error: 'Export is not available in temp mode' }, { status: 400 });
 	}
@@ -11,11 +11,38 @@ export async function GET({ locals }) {
 	await initDb();
 
 	try {
+		const boardIdsParam = url.searchParams.get('boardIds');
 		let res;
-		if (locals.user) {
-			res = await db.query('SELECT * FROM boards WHERE user_id = $1', [locals.user.id]);
+
+		if (boardIdsParam) {
+			const requestedIds = boardIdsParam.split(',').filter(Boolean);
+			if (requestedIds.length === 0) {
+				return json({ error: 'No valid board IDs provided' }, { status: 400 });
+			}
+
+			let query = `
+				WITH RECURSIVE lineage AS (
+					SELECT * FROM boards WHERE id = ANY($1)
+					UNION
+					SELECT b.* FROM boards b
+					INNER JOIN lineage l ON b.parent_id = l.id
+				)
+				SELECT * FROM lineage
+			`;
+			const params = [requestedIds];
+			
+			if (locals.user) {
+				query += ' WHERE user_id = $2 OR user_id IS NULL'; 
+				params.push(locals.user.id);
+			}
+
+			res = await db.query(query, params);
 		} else {
-			res = await db.query('SELECT * FROM boards');
+			if (locals.user) {
+				res = await db.query('SELECT * FROM boards WHERE user_id = $1', [locals.user.id]);
+			} else {
+				res = await db.query('SELECT * FROM boards');
+			}
 		}
 
 		const payload = {

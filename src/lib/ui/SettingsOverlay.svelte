@@ -1,5 +1,6 @@
 <script>
 	import { themeState, PRESETS } from "$lib/state/theme.svelte.js";
+	import { untrack } from "svelte";
 	import { nodesState } from "$lib/state/nodes.svelte.js";
 	import { canvasState } from "$lib/state/canvas.svelte.js";
 	import { shortcutsState } from "$lib/state/shortcuts.svelte.js";
@@ -20,9 +21,12 @@
 	/** @type {HTMLInputElement | null} */
 	let fileInput = $state(null);
 
+	let allBoards = $state([]);
+	let selectedExportBoards = $state(new Set());
+
 	$effect(() => {
-		if (themeState.isOpen && activeTab === "boards") {
-			fetchBoards();
+		if (themeState.isOpen && (activeTab === "boards" || activeTab === "data")) {
+			untrack(() => fetchBoards());
 		}
 	});
 
@@ -30,20 +34,16 @@
 		loadingBoards = true;
 		try {
 			if (env.PUBLIC_DB_MODE === "temp") {
-				// Filter out 'default' board and map to expected UI structure
-				userBoards = nodesState
-					.getKnownBoards()
-					.filter((b) => b.id !== "default");
+				allBoards = nodesState.getKnownBoards();
+				userBoards = allBoards.filter((b) => b.id !== "default");
 				return;
 			}
 
 			const res = await fetch("/api/boards");
 			if (res.ok) {
 				const data = await res.json();
-				// Filter out 'default' board since it's the root canvas, not a dangling one
-				userBoards = (data.boards || []).filter(
-					(/** @type {any} */ b) => b.id !== "default",
-				);
+				allBoards = data.boards || [];
+				userBoards = allBoards.filter((b) => b.id !== "default");
 			}
 		} catch (e) {
 			console.error("Failed to fetch boards", e);
@@ -98,12 +98,33 @@
 		}
 	}
 
+	/** @param {string} boardId */
+	function toggleExportBoard(boardId) {
+		const next = new Set(selectedExportBoards);
+		if (next.has(boardId)) next.delete(boardId);
+		else next.add(boardId);
+		selectedExportBoards = next;
+	}
+
+	function toggleAllExportBoards() {
+		if (selectedExportBoards.size === allBoards.length) {
+			selectedExportBoards = new Set();
+		} else {
+			selectedExportBoards = new Set(allBoards.map((/** @type {any} */ b) => b.id));
+		}
+	}
+
 	async function handleExport() {
+		if (selectedExportBoards.size === 0) {
+			alert("Please select at least one board to export.");
+			return;
+		}
+
 		isExporting = true;
 		try {
 			let blob;
 			if (env.PUBLIC_DB_MODE === "temp") {
-				const payload = nodesState.exportState();
+				const payload = nodesState.exportState(Array.from(selectedExportBoards));
 				const res = await fetch("/api/data/export", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
@@ -115,7 +136,7 @@
 				}
 				blob = await res.blob();
 			} else {
-				const res = await fetch("/api/data/export");
+				const res = await fetch(`/api/data/export?boardIds=${Array.from(selectedExportBoards).join(',')}`);
 				if (!res.ok) {
 					const err = await res.json();
 					alert(err.error || "Export failed");
@@ -127,11 +148,11 @@
 			const url = URL.createObjectURL(blob);
 			const a = document.createElement("a");
 			a.href = url;
-			
+
 			const d = new Date();
-			const timeStr = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}_${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}${String(d.getSeconds()).padStart(2, '0')}`;
+			const timeStr = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}_${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}${String(d.getSeconds()).padStart(2, "0")}`;
 			a.download = `Lattice_Backup_${timeStr}.lattice`;
-			
+
 			a.click();
 			URL.revokeObjectURL(url);
 		} catch (e) {
@@ -166,12 +187,16 @@
 		isImporting = true;
 		importStatus = null;
 		try {
+			const textPayload = await file.text();
 			const res = await fetch("/api/data/import", {
 				method: "POST",
-				body: file,
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: textPayload,
 			});
 			const result = await res.json();
-			
+
 			if (!res.ok) {
 				importStatus = result.error || "Import failed";
 			} else if (env.PUBLIC_DB_MODE === "temp") {
@@ -269,13 +294,13 @@
 			onclick={(e) => e.stopPropagation()}
 		>
 			<!-- Sidebar -->
-			<div
-				class="w-48 bg-canvas border-r border-border flex flex-col"
-			>
+			<div class="w-48 bg-canvas border-r border-border flex flex-col">
 				<div
 					class="px-4 py-5 text-[10px] font-bold text-accent tracking-[0.2em] uppercase border-b border-border flex items-center gap-2 shadow-sm"
 				>
-					<div class="w-2 h-2 bg-accent animate-pulse shadow-[0_0_8px_var(--color-accent)]"></div>
+					<div
+						class="w-2 h-2 bg-accent animate-pulse shadow-[0_0_8px_var(--color-accent)]"
+					></div>
 					SYS_CONF_
 				</div>
 
@@ -328,9 +353,7 @@
 						>
 					</button>
 
-					<h2
-						class="text-2xl font-bold text-text-primary mb-6"
-					>
+					<h2 class="text-2xl font-bold text-text-primary mb-6">
 						Customization
 					</h2>
 
@@ -384,14 +407,28 @@
 											<input
 												id="color-{key}"
 												type="color"
-												value={themeState.colors[/** @type {keyof typeof themeState.colors} */ (key)]}
+												value={themeState.colors[
+													/** @type {keyof typeof themeState.colors} */ (
+														key
+													)
+												]}
 												oninput={(e) =>
-													handleColorChange(/** @type {keyof typeof themeState.colors} */ (key), e)}
+													handleColorChange(
+														/** @type {keyof typeof themeState.colors} */ (
+															key
+														),
+														e,
+													)}
 												class="absolute -inset-2 w-16 h-16 cursor-pointer opacity-0"
 											/>
 											<div
 												class="w-full h-full pointer-events-none"
-												style="background-color: {themeState.colors[/** @type {keyof typeof themeState.colors} */ (key)]}"
+												style="background-color: {themeState
+													.colors[
+													/** @type {keyof typeof themeState.colors} */ (
+														key
+													)
+												]}"
 											></div>
 										</div>
 									</div>
@@ -422,9 +459,7 @@
 						>
 					</button>
 
-					<h2
-						class="text-2xl font-bold text-text-primary mb-4"
-					>
+					<h2 class="text-2xl font-bold text-text-primary mb-4">
 						Keyboard Shortcuts
 					</h2>
 					<p class="text-sm text-text-secondary mb-8">
@@ -494,9 +529,7 @@
 						>
 					</button>
 
-					<h2
-						class="text-2xl font-bold text-text-primary mb-6"
-					>
+					<h2 class="text-2xl font-bold text-text-primary mb-6">
 						Board Management
 					</h2>
 
@@ -521,9 +554,7 @@
 								Fetching Data...
 							</div>
 						{:else if userBoards.length === 0}
-							<div
-								class="text-sm text-text-secondary italic"
-							>
+							<div class="text-sm text-text-secondary italic">
 								No boards found. Make sure you've saved a board.
 							</div>
 						{:else}
@@ -635,21 +666,62 @@
 								Export Workspace
 							</h3>
 							<p
-								class="text-xs text-text-secondary leading-relaxed mb-8 flex-1"
+								class="text-xs text-text-secondary leading-relaxed mb-4 flex-1"
 							>
-								Generate a <code class="text-accent font-bold"
-									>.lattice</code
-								> file containing all your boards, nodes, drawings,
-								and connections. Perfect for backups or moving to
-								another device.
+								Select boards to export. Nested boards inside selected boards are automatically included.
 							</p>
+
+							{#if loadingBoards}
+								<div class="h-32 flex items-center justify-center text-sm text-text-secondary opacity-50 mb-4">
+									Loading boards...
+								</div>
+							{:else}
+								<div class="mb-4">
+									<label class="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-text-primary/5 rounded border border-transparent transition-colors mb-2">
+										<input 
+											type="checkbox" 
+											class="w-4 h-4 rounded border-border text-accent focus:ring-accent"
+											checked={selectedExportBoards.size > 0 && selectedExportBoards.size === allBoards.length}
+											indeterminate={selectedExportBoards.size > 0 && selectedExportBoards.size < allBoards.length}
+											onchange={toggleAllExportBoards}
+										/>
+										<span class="text-sm font-bold text-text-primary select-none">Select All</span>
+									</label>
+
+									<div class="h-40 overflow-y-auto mb-4 p-1 border border-border/50 rounded bg-black/10">
+										{#each allBoards as board}
+											<label class="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-text-primary/10 rounded transition-colors group">
+												<input 
+													type="checkbox" 
+													class="w-4 h-4 rounded border-border text-accent focus:ring-accent"
+													checked={selectedExportBoards.has(board.id)}
+													onchange={() => toggleExportBoard(board.id)}
+												/>
+												<div class="flex-1 min-w-0">
+													<div class="text-sm font-medium text-text-primary truncate select-none group-hover:text-accent transition-colors">
+														{board.name || (`Board ${board.id.slice(0, 6)}`)}
+													</div>
+													<div class="text-[10px] text-text-secondary opacity-50 truncate font-mono select-none">
+														{board.id}
+													</div>
+												</div>
+											</label>
+										{/each}
+										{#if allBoards.length === 0}
+											<div class="flex items-center justify-center h-full text-xs text-text-secondary opacity-50">
+												No boards available.
+											</div>
+										{/if}
+									</div>
+								</div>
+							{/if}
 
 							<button
 								onclick={handleExport}
-								disabled={isExporting}
+								disabled={isExporting || selectedExportBoards.size === 0}
 								class="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-sm font-bold uppercase tracking-widest transition-all
-									{isExporting
-									? 'bg-text-primary/10 text-text-secondary cursor-wait'
+									{isExporting || selectedExportBoards.size === 0
+									? 'bg-text-primary/10 text-text-secondary cursor-not-allowed'
 									: 'bg-accent text-canvas hover:scale-[1.02] hover:shadow-lg hover:shadow-accent/20 active:scale-[0.98] cursor-pointer'}"
 							>
 								{#if isExporting}
@@ -784,7 +856,7 @@
 											: 'bg-red-500/5 text-red-400 border-red-500/20'}"
 									>
 										<div
-											class="w-1 h-1 rounded-full {importStatus.startsWith(
+											class="w-1 h-1 rounded-full overflow-auto {importStatus.startsWith(
 												'Imported',
 											)
 												? 'bg-green-400 animate-pulse'

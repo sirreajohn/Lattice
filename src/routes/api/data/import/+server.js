@@ -12,47 +12,49 @@ export async function POST({ request, locals }) {
 			return json({ error: 'Invalid backup file format' }, { status: 400 });
 		}
 
+		const userId = locals.user?.id || null;
+		const targetRootId = userId ? `root_${userId}` : 'default';
+
+		// 1. Build a remap table generating fresh UUIDs to prevent collisions
+		const remap = new Map();
+		for (const board of payload.boards) {
+			remap.set(board.id, crypto.randomUUID());
+		}
+
+		// 2. Rewrite references
+		for (const board of payload.boards) {
+			board.id = remap.get(board.id);
+
+			if (board.parent_id && remap.has(board.parent_id)) {
+				board.parent_id = remap.get(board.parent_id);
+			} else {
+				// Top level imported boards get rooted to current session context
+				board.parent_id = targetRootId;
+			}
+
+			if (Array.isArray(board.nodes)) {
+				for (const node of board.nodes) {
+					if (node.type === 'board' && remap.has(node.id)) {
+						node.id = remap.get(node.id);
+					}
+				}
+			}
+		}
+
 		if (env.PUBLIC_DB_MODE === 'temp') {
 			return json({ success: true, payload });
 		}
 
 		await initDb();
 
-		const userId = locals.user?.id || null;
-		const currentPrimaryRootId = userId ? `root_${userId}` : null;
-		
-		let oldPrimaryRootId = payload.userId ? `root_${payload.userId}` : 'default';
-		if (!payload.boards.some(b => b.id === oldPrimaryRootId)) {
-			const inferredRoot = payload.boards.find(b => !b.parent_id && (b.id === 'default' || b.id.startsWith('root_')));
-			if (inferredRoot) oldPrimaryRootId = inferredRoot.id;
-		}
-
 		let imported = 0;
 		let skipped = 0;
 
 		for (const board of payload.boards) {
 			try {
-				if (currentPrimaryRootId && oldPrimaryRootId && oldPrimaryRootId !== currentPrimaryRootId) {
-					if (board.id === oldPrimaryRootId) {
-						board.id = currentPrimaryRootId;
-					}
-					if (board.parent_id === oldPrimaryRootId) {
-						board.parent_id = currentPrimaryRootId;
-					}
-				}
-
 				await db.query(`
 					INSERT INTO boards (id, name, parent_id, depth, nodes, connections, drawings, user_id, updated_at)
 					VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, $8, NOW())
-					ON CONFLICT (id) DO UPDATE SET
-						name = EXCLUDED.name,
-						parent_id = EXCLUDED.parent_id,
-						depth = EXCLUDED.depth,
-						nodes = EXCLUDED.nodes,
-						connections = EXCLUDED.connections,
-						drawings = EXCLUDED.drawings,
-						user_id = COALESCE(boards.user_id, EXCLUDED.user_id),
-						updated_at = NOW();
 				`, [
 					board.id,
 					board.name,
