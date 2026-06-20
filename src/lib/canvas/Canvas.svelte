@@ -112,10 +112,8 @@
 			}
 		}
 
-		if (e.button === 1 || e.altKey || e.button === 2) { // Middle click or Alt + Drag or Right Click drag for pan? Wait, right click is context menu.
-			// Let's stick to Option A: Middle click or Alt.
-		}
-		if (e.button === 1 || e.altKey) {
+		// Pan tool logic
+		if ((nodesState.activeTool === "pan" && e.button === 0) || e.button === 1 || e.altKey) {
 			e.preventDefault();
 			const startX = e.clientX;
 			const startY = e.clientY;
@@ -139,7 +137,7 @@
 		}
 
 		// Option A marquee selection (Left-Click Drag on background)
-		if (e.button === 0 && e.target === canvasElement && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
+		if (nodesState.activeTool === "pointer" && e.button === 0 && e.target === canvasElement && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
 			e.preventDefault();
 			
 			const startX = e.clientX;
@@ -197,6 +195,9 @@
 	/** @param {WheelEvent} e */
 	function handleWheel(e) {
 		if (!e.ctrlKey && !e.metaKey) {
+			e.preventDefault();
+			canvasState.x -= e.deltaX;
+			canvasState.y -= e.deltaY;
 			return;
 		}
 
@@ -367,8 +368,9 @@
 		background-image: radial-gradient(var(--color-border) 1.5px, transparent 1.5px);
 		background-position: {canvasState.x}px {canvasState.y}px;
 		background-size: {30 * canvasState.scale}px {30 * canvasState.scale}px;
-		cursor: {nodesState.activeTool === 'pencil' ||
-	nodesState.activeTool === 'eraser'
+		cursor: {nodesState.activeTool === 'pan' 
+			? 'grab'
+			: nodesState.activeTool === 'pencil' || nodesState.activeTool === 'eraser'
 		? 'crosshair'
 		: nodesState.activeTool === 'text'
 			? 'text'

@@ -21,6 +21,8 @@
 	let dragJustFinished = false;
 
 	function handlePointerDown(e) {
+		if (nodesState.activeTool === 'pan' && e.button === 0) return;
+
 		// We want to handle right clicks to select nodes, but not initiate drags.
 		if (['INPUT', 'TEXTAREA', 'BUTTON', 'A'].includes(e.target.tagName)) return;
 		
