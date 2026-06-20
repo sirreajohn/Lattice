@@ -54,6 +54,9 @@
 			case "tool-pointer":
 				nodesState.activeTool = "pointer";
 				break;
+			case "tool-pan":
+				nodesState.activeTool = "pan";
+				break;
 			case "tool-pencil":
 				nodesState.activeTool = "pencil";
 				break;

@@ -4,9 +4,10 @@ export class ShortcutsState {
 	bindings = $state({
 		// Tools
 		'tool-pointer': '1',
-		'tool-pencil': '2',
-		'tool-eraser': '3',
-		'tool-text': '4',
+		'tool-pan': '2',
+		'tool-pencil': '3',
+		'tool-eraser': '4',
+		'tool-text': '5',
 		// Cards
 		'add-note': 'n',
 		'add-board': 'b',
